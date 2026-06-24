@@ -35,6 +35,9 @@
     "enable": "Speed",
     "loading": "Loading processes…",
     "noResults": "No matching processes",
+    "injectFail": "Injection failed, try running as administrator",
+    "enableFail": "Failed to enable speed",
+    "disableFail": "Failed to disable speed",
     "detail": {
       "title": "Process Detail",
       "pid": "Process ID",

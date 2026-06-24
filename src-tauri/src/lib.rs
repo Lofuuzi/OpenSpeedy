@@ -122,6 +122,17 @@ async fn bridge_disable(pid: u32, arch: String) -> bool {
     }
 }
 
+/// Query bridge for per-PID status.
+/// Returns Some(true) = enabled, Some(false) = injected but disabled, None = not injected.
+#[tauri::command(async)]
+async fn bridge_get_status(pid: u32, arch: String) -> Option<bool> {
+    if arch == "x86" {
+        bridge_client::bridge32_get_status(pid)
+    } else {
+        bridge_client::bridge64_get_status(pid)
+    }
+}
+
 #[tauri::command(async)]
 async fn set_always_on_top(window: tauri::Window, on_top: bool) {
     let _ = window.set_always_on_top(on_top);
@@ -153,6 +164,7 @@ pub fn run() {
             bridge_inject,
             bridge_enable,
             bridge_disable,
+            bridge_get_status,
             set_always_on_top,
         ])
         .build(tauri::generate_context!())

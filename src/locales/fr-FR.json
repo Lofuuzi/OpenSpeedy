@@ -35,6 +35,9 @@
     "enable": "Vitesse",
     "loading": "Chargement des processus…",
     "noResults": "Aucun processus correspondant",
+    "injectFail": "Échec de l'injection, exécutez en tant qu'administrateur",
+    "enableFail": "Échec de l'activation",
+    "disableFail": "Échec de la désactivation",
     "detail": {
       "title": "Détails du Processus",
       "pid": "ID du Processus",

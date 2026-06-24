@@ -4,6 +4,8 @@
 //!   INJECT <pid>  EJECT <pid>  ENABLE <pid>  DISABLE <pid>
 //!   ISENABLED <pid>  SETSPEED <factor>  GETSPEED  SHUTDOWN
 //!
+//!   STATUS <pid>  — check injection + enabled status
+//!
 //! Responses:  OK [value]  or  ERROR <message>
 
 #![windows_subsystem = "windows"]
@@ -257,6 +259,44 @@ fn do_is_enabled(pid: u32) -> Result<bool, String> {
     }
 }
 
+/// Check if speedpatch DLL is loaded in the target process, and if enabled.
+/// Returns: Some(true) = enabled, Some(false) = injected+disabled, None = not injected.
+fn do_status(pid: u32) -> Option<bool> {
+    let dll_name = speedpatch_dll(is_process_64bit(pid));
+
+    // Check if DLL is loaded in target process
+    let snap = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid) }.ok()?;
+    let mut me = MODULEENTRY32W { dwSize: std::mem::size_of::<MODULEENTRY32W>() as u32, ..Default::default() };
+    let mut injected = false;
+
+    unsafe {
+        if Module32FirstW(snap, &mut me).is_ok() {
+            loop {
+                let mod_name = String::from_utf16_lossy(&me.szModule)
+                    .trim_end_matches('\0').to_lowercase();
+                if mod_name == dll_name.to_lowercase() {
+                    injected = true;
+                    break;
+                }
+                if Module32NextW(snap, &mut me).is_err() { break; }
+            }
+        }
+    }
+    unsafe { let _ = CloseHandle(snap); }
+
+    if !injected { return None; }
+
+    // DLL is loaded — query enabled status
+    let dll_wide = to_wide(OWN_SPEEDPATCH);
+    unsafe {
+        let h = LoadLibraryW(PCWSTR::from_raw(dll_wide.as_ptr())).ok()?;
+        let sp_is_enabled: Option<unsafe extern "system" fn(u32) -> i32> =
+            std::mem::transmute(GetProcAddress(h, s!("SP_IsEnabledById")));
+        let enabled = sp_is_enabled?(pid) != 0;
+        Some(enabled)
+    }
+}
+
 fn do_set_speed(factor: f64) {
     let dll_wide = to_wide(OWN_SPEEDPATCH);
     unsafe {
@@ -315,6 +355,14 @@ fn handle_command(line: &str) -> String {
         "GETSPEED" => {
             let s = do_get_speed();
             format!("OK {s:.6}")
+        }
+        "STATUS" => {
+            let pid: u32 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+            match do_status(pid) {
+                Some(true) => "OK ENABLED".into(),
+                Some(false) => "OK DISABLED".into(),
+                None => "OK NOT_INJECTED".into(),
+            }
         }
         "SHUTDOWN" => "OK shutting down".into(),
         _ => "ERROR unknown command".into(),

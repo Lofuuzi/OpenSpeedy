@@ -115,3 +115,20 @@ pub fn bridge64_disable(pid: u32) -> bool {
 pub fn bridge32_disable(pid: u32) -> bool {
     pipe_command(PIPE_32, &format!("DISABLE {pid}")).map(|r| r == "OK").unwrap_or(false)
 }
+
+/// Query per-PID status from bridge.
+/// Returns Some(true) = injected + enabled, Some(false) = injected + disabled, None = not found / error.
+pub fn bridge64_get_status(pid: u32) -> Option<bool> {
+    match pipe_command(PIPE_64, &format!("STATUS {pid}"))?.as_str() {
+        "OK ENABLED" => Some(true),
+        "OK DISABLED" => Some(false),
+        _ => None,
+    }
+}
+pub fn bridge32_get_status(pid: u32) -> Option<bool> {
+    match pipe_command(PIPE_32, &format!("STATUS {pid}"))?.as_str() {
+        "OK ENABLED" => Some(true),
+        "OK DISABLED" => Some(false),
+        _ => None,
+    }
+}

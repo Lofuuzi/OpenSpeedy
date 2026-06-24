@@ -31,6 +31,9 @@
     "enable": "Tempo",
     "loading": "Prozesse werden geladen…",
     "noResults": "Keine passenden Prozesse",
+    "injectFail": "Injektion fehlgeschlagen, als Administrator ausführen",
+    "enableFail": "Aktivierung fehlgeschlagen",
+    "disableFail": "Deaktivierung fehlgeschlagen",
     "detail": {
       "title": "Prozessdetails",
       "pid": "Prozess-ID",

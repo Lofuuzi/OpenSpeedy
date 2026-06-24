@@ -14,6 +14,7 @@ import MemoryIcon from "@mui/icons-material/Memory";
 import SpeedPanel from "./SpeedPanel";
 import ProcessDetail from "./ProcessDetail";
 import { useSettings, useSpeed } from "../hooks/useSettings";
+import { useSnackbar } from "../contexts/SnackbarContext";
 
 // ── Types & constants ────────────────────────────────────────────────────
 
@@ -146,6 +147,8 @@ export default function ProcessManager() {
   const [selectedPid, setSelectedPid] = useState<number | null>(null);
   const { settings } = useSettings();
   const { speed, setSpeed, commitSpeed } = useSpeed();
+  const { notify } = useSnackbar();
+  const { t } = useTranslation();
 
   const gears = useMemo(() => settings
     ? [1, 2, 3, 4, 5].map(i => (settings[`gear${i}Speed` as keyof typeof settings] as number) || 1)
@@ -159,26 +162,39 @@ export default function ProcessManager() {
     return s;
   }, [speedMap]);
 
-  // Toggle
+  // Toggle — optimistic update with rollback on failure
   async function toggle(pid: number, arch: string) {
     const cur = speedMap.get(pid);
     const wasOn = cur?.enabled ?? false;
+    const wasInjected = cur?.injected ?? false;
 
     if (!wasOn) {
       // Turning ON
-      if (!cur?.injected) {
-        // First time — inject DLL (auto-enables via DllMain)
+      if (!wasInjected) {
+        // First time inject
         setSpeedMap(prev => { const n = new Map(prev); n.set(pid, { injected: true, enabled: true, arch }); return n; });
-        await invoke("bridge_inject", { pid, arch });
+        const ok = await invoke<boolean>("bridge_inject", { pid, arch }).catch(() => false);
+        if (!ok) {
+          setSpeedMap(prev => { const n = new Map(prev); n.delete(pid); return n; });
+          notify(t("process.injectFail"), "error");
+        }
       } else {
-        // Already injected — just re-enable
-        setSpeedMap(prev => { const n = new Map(prev); n.set(pid, { ...cur, enabled: true }); return n; });
-        await invoke("bridge_enable", { pid, arch: cur!.arch });
+        // Already injected — re-enable
+        setSpeedMap(prev => { const n = new Map(prev); n.set(pid, { ...cur!, enabled: true }); return n; });
+        const ok = await invoke<boolean>("bridge_enable", { pid, arch }).catch(() => false);
+        if (!ok) {
+          setSpeedMap(prev => { const n = new Map(prev); n.set(pid, cur!); return n; });
+          notify(t("process.enableFail"), "error");
+        }
       }
     } else {
-      // Turning OFF — disable but keep DLL injected
+      // Turning OFF
       setSpeedMap(prev => { const n = new Map(prev); n.set(pid, { ...cur!, enabled: false }); return n; });
-      await invoke("bridge_disable", { pid, arch: cur!.arch });
+      const ok = await invoke<boolean>("bridge_disable", { pid, arch }).catch(() => false);
+      if (!ok) {
+        setSpeedMap(prev => { const n = new Map(prev); n.set(pid, cur!); return n; });
+        notify(t("process.disableFail"), "error");
+      }
     }
   }
 
@@ -207,6 +223,22 @@ export default function ProcessManager() {
     selectedPid ? processes.find(p => p.pid === selectedPid) ?? null : null,
   [processes, selectedPid]);
   const selectedSpeedState = selectedPid ? speedMap.get(selectedPid) : undefined;
+
+  // Query real injection status from bridge when selecting a process
+  useEffect(() => {
+    const p = selectedProcess;
+    if (!p) return;
+    invoke<boolean | null>("bridge_get_status", { pid: p.pid, arch: p.arch })
+      .then(status => {
+        if (status === true) {
+          setSpeedMap(prev => { const n = new Map(prev); n.set(p.pid, { injected: true, enabled: true, arch: p.arch }); return n; });
+        } else if (status === false) {
+          setSpeedMap(prev => { const n = new Map(prev); n.set(p.pid, { injected: true, enabled: false, arch: p.arch }); return n; });
+        }
+        // status === null means not injected — don't set anything
+      })
+      .catch(() => {});
+  }, [selectedPid]);
 
   return (
     <Box sx={{ height: "calc(100vh - 48px)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
