@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Box, Paper, Typography, Slider, ButtonBase } from "@mui/material";
 import SpeedIcon from "@mui/icons-material/Speed";
@@ -22,9 +22,29 @@ interface SpeedPanelProps {
 
 export default React.memo(function SpeedPanel({ speed, gears, onChange, onCommit }: SpeedPanelProps) {
   const { t } = useTranslation();
-  const active = (g: number) => Math.abs(speed - g) < 0.001;
+  const [editing, setEditing] = useState(false);
+  const [editVal, setEditVal] = useState("");
 
+  const active = (g: number) => Math.abs(speed - g) < 0.001;
   const speedColor = speed > 1.01 ? "secondary.main" : speed < 0.99 ? "warning.main" : "primary.main";
+
+  function beginEdit() {
+    setEditVal(speed.toFixed(2));
+    setEditing(true);
+  }
+
+  function commitEdit() {
+    const v = parseFloat(editVal);
+    if (!isNaN(v) && v >= 0.001 && v <= 1000) {
+      onChange(v);
+      onCommit(v);
+    }
+    setEditing(false);
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+  }
 
   return (
     <Paper elevation={0}
@@ -48,12 +68,36 @@ export default React.memo(function SpeedPanel({ speed, gears, onChange, onCommit
 
       {/* ── Speed display + slider ── */}
       <Box sx={{ px: 2, pb: 1 }}>
-        <Typography variant="h3" sx={{
-          fontWeight: 800, fontVariantNumeric: "tabular-nums", lineHeight: 1,
-          textAlign: "center", mb: 0.5, color: speedColor,
-        }}>
-          {speed.toFixed(2)}<Typography component="span" variant="h5" sx={{ fontWeight: 600, color: "text.secondary" }}>×</Typography>
-        </Typography>
+        {/* ── Speed display (click to edit) ── */}
+        {editing ? (
+          <Box sx={{ textAlign: "center", mb: 0.5 }}>
+            <input
+              autoFocus
+              value={editVal}
+              onChange={e => setEditVal(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit(); }}
+              onBlur={commitEdit}
+              style={{
+                width: 120, textAlign: "center", fontSize: "2rem", fontWeight: 800,
+                fontVariantNumeric: "tabular-nums", border: "none", borderBottom: `2px solid ${speedColor}`,
+                outline: "none", background: "transparent", color: "inherit",
+              }}
+            />
+            <Typography variant="caption" sx={{ display: "block", mt: 0.3, color: "text.disabled" }}>
+              ⏎ Enter {t("speed.confirm")} · Esc {t("speed.cancel")}
+            </Typography>
+          </Box>
+        ) : (
+          <Box onClick={beginEdit} sx={{ cursor: "text", textAlign: "center", mb: 0.5 }}>
+            <Typography variant="h3" sx={{
+              fontWeight: 800, fontVariantNumeric: "tabular-nums", lineHeight: 1,
+              color: speedColor, display: "inline",
+            }}>
+              {speed.toFixed(2)}
+            </Typography>
+            <Typography component="span" variant="h5" sx={{ fontWeight: 600, color: "text.secondary", display: "inline" }}>×</Typography>
+          </Box>
+        )}
 
         <Slider
           value={toSlider(speed)}

@@ -22,7 +22,9 @@
     "slow": "SLOW",
     "fast": "FAST",
     "normal": "原速",
-    "reset": "原速"
+    "reset": "原速",
+    "confirm": "确认",
+    "cancel": "取消"
   },
   "process": {
     "title": "系统进程",

@@ -126,7 +126,9 @@ function App() {
           </Box>
 
           <Box sx={{ width: "calc(100vw - 72px)", display: "flex", flexDirection: "column", overflow: "hidden "}}>
-            {tab === 0 && <ProcessManager />}
+            <Box sx={{ display: tab === 0 ? "flex" : "none", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+              <ProcessManager />
+            </Box>
 
             {tab === 1 && <SettingsManager />}
 

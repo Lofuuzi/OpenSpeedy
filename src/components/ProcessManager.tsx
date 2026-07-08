@@ -147,8 +147,8 @@ export default function ProcessManager() {
   const [selectedPid, setSelectedPid] = useState<number | null>(null);
   const { settings } = useSettings();
   const { speed, setSpeed, commitSpeed } = useSpeed();
-  const { notify } = useSnackbar();
-  const { t } = useTranslation();
+  useSnackbar();
+  useTranslation();
 
   const gears = useMemo(() => settings
     ? [1, 2, 3, 4, 5].map(i => (settings[`gear${i}Speed` as keyof typeof settings] as number) || 1)
@@ -162,47 +162,25 @@ export default function ProcessManager() {
     return s;
   }, [speedMap]);
 
-  // Toggle — optimistic update with rollback on failure
+  // Toggle — optimistic: set state immediately, fire backend call in background
   async function toggle(pid: number, arch: string) {
-    const cur = speedMap.get(pid);
-    const wasOn = cur?.enabled ?? false;
-    const wasInjected = cur?.injected ?? false;
+    const wasOn = speedMap.get(pid)?.enabled ?? false;
 
     if (!wasOn) {
-      // Turning ON
-      if (!wasInjected) {
-        // First time inject
-        setSpeedMap(prev => { const n = new Map(prev); n.set(pid, { injected: true, enabled: true, arch }); return n; });
-        const ok = await invoke<boolean>("bridge_inject", { pid, arch }).catch((e) => { console.error("[toggle] bridge_inject error:", e); return false; });
-        console.log("[toggle] bridge_inject result:", ok);
-        if (!ok) {
-          setSpeedMap(prev => { const n = new Map(prev); n.delete(pid); return n; });
-          notify(t("process.injectFail"), "error");
-        }
-      } else {
-        // Already injected — re-enable
-        setSpeedMap(prev => { const n = new Map(prev); n.set(pid, { ...cur!, enabled: true }); return n; });
-        const ok = await invoke<boolean>("bridge_enable", { pid, arch }).catch(() => false);
-        if (!ok) {
-          setSpeedMap(prev => { const n = new Map(prev); n.set(pid, cur!); return n; });
-          notify(t("process.enableFail"), "error");
-        }
-      }
+      setSpeedMap(prev => { const n = new Map(prev); n.set(pid, { injected: true, enabled: true, arch }); return n; });
+      invoke<boolean>("bridge_inject", { pid, arch })
+        .catch((e) => { console.error("[toggle] bridge_inject error:", e); });
     } else {
-      // Turning OFF
-      setSpeedMap(prev => { const n = new Map(prev); n.set(pid, { ...cur!, enabled: false }); return n; });
-      const ok = await invoke<boolean>("bridge_disable", { pid, arch }).catch(() => false);
-      if (!ok) {
-        setSpeedMap(prev => { const n = new Map(prev); n.set(pid, cur!); return n; });
-        notify(t("process.disableFail"), "error");
-      }
+      setSpeedMap(prev => { const n = new Map(prev); n.set(pid, { ...prev.get(pid)!, enabled: false }); return n; });
+      invoke<boolean>("bridge_disable", { pid, arch })
+        .catch(() => {});
     }
   }
 
   // Data fetch
   useEffect(() => { invoke<ProcessInfo[]>("get_process_list").then(setProcesses).catch(() => {}); }, []);
-  useInterval(async () => { try { setProcesses(await invoke<ProcessInfo[]>("get_process_list_fast")); } catch {} }, 3000);
   useEffect(() => { if (search.trim()) { invoke<ProcessInfo[]>("get_process_list").then(setProcesses).catch(() => {}); } }, [search]);
+  useInterval(async () => { try { setProcesses(await invoke<ProcessInfo[]>("get_process_list_fast")); } catch {} }, 3000);
 
   // Filter
   const filtered = useMemo(() => {

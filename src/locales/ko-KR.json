@@ -18,7 +18,9 @@
     "slow": "SLOW",
     "fast": "FAST",
     "normal": "기본",
-    "reset": "초기화"
+    "reset": "초기화",
+    "confirm": "확인",
+    "cancel": "취소"
   },
   "process": {
     "title": "시스템 프로세스",
@@ -68,6 +70,8 @@
     "increase": "증가",
     "decrease": "감소",
     "reset": "초기화",
+    "confirm": "확인",
+    "cancel": "취소",
     "gears": "기어 프리셋",
     "gear": "기어",
     "multiplier": "배율",

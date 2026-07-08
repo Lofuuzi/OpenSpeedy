@@ -79,16 +79,6 @@ pub fn bridge64_get_speed() -> Option<f64> {
     pipe_command(PIPE_64, "GETSPEED").and_then(|r| r.strip_prefix("OK ").and_then(|s| s.parse().ok()))
 }
 
-/// Send SHUTDOWN to bridge64 (fire-and-forget — bridge exits after receiving).
-pub fn bridge64_shutdown() {
-    let _ = pipe_command(PIPE_64, "SHUTDOWN");
-}
-
-/// Send SHUTDOWN to bridge32 (fire-and-forget — bridge exits after receiving).
-pub fn bridge32_shutdown() {
-    let _ = pipe_command(PIPE_32, "SHUTDOWN");
-}
-
 // ── Per-arch inject / eject / enable / disable ──
 
 pub fn bridge64_inject(pid: u32) -> bool {

@@ -18,7 +18,9 @@
     "slow": "LANGSAM",
     "fast": "SCHNELL",
     "normal": "Normal",
-    "reset": "Reset"
+    "reset": "Reset",
+    "confirm": "OK",
+    "cancel": "Cancel"
   },
   "process": {
     "title": "Systemprozesse",
@@ -68,6 +70,8 @@
     "increase": "Erhöhen",
     "decrease": "Verringern",
     "reset": "Reset",
+    "confirm": "OK",
+    "cancel": "Cancel",
     "gears": "Presets",
     "gear": "Preset",
     "multiplier": "Multiplikator",

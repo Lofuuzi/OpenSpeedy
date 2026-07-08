@@ -58,10 +58,12 @@ export function useSettingsValue<K extends keyof SettingsState>(
   key: K,
   onChange: (value: SettingsState[K]) => void,
 ) {
-  const { subscribe, get } = useSettings();
+  const { subscribe } = useSettings();
   useEffect(() => {
-    const v = get(key);
-    if (v !== null) onChange(v);
+    // Use async loadSettings so we don't depend on _cache being already loaded
+    loadSettings().then(s => {
+      if (s[key] !== undefined) onChange(s[key]);
+    });
     return subscribe((k, v) => {
       if (k === key) onChange(v as SettingsState[K]);
     });
@@ -72,6 +74,17 @@ export function useSpeed() {
   const { set } = useSettings();
   const [speed, setSpeed] = useState(1.0);
   useSettingsValue("speed", v => setSpeed(v as number));
+
+  // Sync saved speed to bridge on startup
+  useEffect(() => {
+    invoke<number | null>("bridge_get_speed").then(current => {
+      loadSettings().then(s => {
+        if (s.speed && current !== s.speed) {
+          invoke("bridge_set_speed", { factor: s.speed });
+        }
+      });
+    });
+  }, []);
 
   const updateSpeed = useCallback((s: number) => {
     setSpeed(s);

@@ -18,7 +18,9 @@
     "slow": "慢",
     "fast": "快",
     "normal": "正常",
-    "reset": "重設"
+    "reset": "重設",
+    "confirm": "確認",
+    "cancel": "取消"
   },
   "process": {
     "title": "系統程序",
@@ -68,6 +70,8 @@
     "increase": "微調加速",
     "decrease": "微調減速",
     "reset": "恢復正常速度",
+    "confirm": "確認",
+    "cancel": "取消",
     "gears": "檔位設定",
     "gear": "檔位",
     "multiplier": "速度倍率",

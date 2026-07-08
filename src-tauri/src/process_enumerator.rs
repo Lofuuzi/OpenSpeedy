@@ -9,10 +9,14 @@ use windows::Win32::Graphics::Gdi::{
     BITMAPINFOHEADER, DIB_RGB_COLORS,
 };
 use windows::Win32::System::Diagnostics::ToolHelp::{
-    CreateToolhelp32Snapshot, Module32FirstW, Module32NextW, Process32FirstW, Process32NextW,
-    MODULEENTRY32W, PROCESSENTRY32W, TH32CS_SNAPMODULE, TH32CS_SNAPPROCESS,
+    CreateToolhelp32Snapshot, Process32FirstW, Process32NextW,
+    PROCESSENTRY32W, TH32CS_SNAPPROCESS,
 };
-use windows::Win32::System::ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS};
+use windows::Win32::System::ProcessStatus::{
+    GetModuleFileNameExW, GetModuleInformation, GetProcessMemoryInfo, EnumProcessModulesEx,
+    MODULEINFO, PROCESS_MEMORY_COUNTERS, LIST_MODULES_32BIT, LIST_MODULES_64BIT,
+};
+use windows::Win32::Foundation::HMODULE;
 use windows::Win32::System::Threading::{
     IsWow64Process, OpenProcess, OpenProcessToken, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
     PROCESS_QUERY_INFORMATION, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_VM_READ,
@@ -97,48 +101,104 @@ pub struct ModuleInfo {
     pub size: u32,
 }
 
+fn to_wide(s: &str) -> Vec<u16> {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+    OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
+}
+
 // ---------------------------------------------------------------------------
 // Module enumeration for a single process
 // ---------------------------------------------------------------------------
 pub fn enumerate_modules(pid: u32) -> Vec<ModuleInfo> {
     let mut modules = Vec::new();
 
-    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid) };
-    if snapshot.is_err() {
-        return modules;
-    }
-    let snapshot = snapshot.unwrap();
-
-    let mut entry = MODULEENTRY32W {
-        dwSize: std::mem::size_of::<MODULEENTRY32W>() as u32,
-        ..Default::default()
+    // Use EnumProcessModulesEx — handles cross-architecture (WOW64) correctly,
+    // unlike CreateToolhelp32Snapshot which can only see modules matching the
+    // caller's bitness.
+    let h_proc = match unsafe {
+        OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid)
+    } {
+        Ok(h) => h,
+        Err(_) => return modules,
     };
 
-    if unsafe { Module32FirstW(snapshot, &mut entry) }.is_ok() {
-        loop {
-            let name = String::from_utf16_lossy(&entry.szModule)
-                .trim_end_matches('\0')
-                .to_string();
-            let path = String::from_utf16_lossy(&entry.szExePath)
-                .trim_end_matches('\0')
-                .to_string();
+    // Determine module filter flag: 32-bit or 64-bit modules
+    let filter = {
+        let mut wow64 = windows::Win32::Foundation::BOOL::default();
+        let kernel32_wide = to_wide("kernel32.dll");
+        let k32 = unsafe {
+            windows::Win32::System::LibraryLoader::GetModuleHandleW(
+                windows::core::PCWSTR::from_raw(kernel32_wide.as_ptr()),
+            )
+            .unwrap_or_default()
+        };
+        let is_wow64_proc: Option<
+            unsafe extern "system" fn(
+                windows::Win32::Foundation::HANDLE,
+                *mut windows::Win32::Foundation::BOOL,
+            ) -> windows::Win32::Foundation::BOOL,
+        > = unsafe {
+            std::mem::transmute(windows::Win32::System::LibraryLoader::GetProcAddress(
+                k32,
+                windows::core::s!("IsWow64Process"),
+            ))
+        };
+        let is_wow64 = if let Some(f) = is_wow64_proc {
+            unsafe { f(h_proc, &mut wow64); }
+            wow64.as_bool()
+        } else {
+            false
+        };
+        if is_wow64 { LIST_MODULES_32BIT } else { LIST_MODULES_64BIT }
+    };
 
-            if !name.is_empty() {
-                modules.push(ModuleInfo {
-                    name,
-                    path,
-                    base_address: entry.modBaseAddr as u64,
-                    size: entry.modBaseSize,
-                });
-            }
+    let mut h_mods: Vec<HMODULE> = vec![HMODULE::default(); 1024];
+    let mut needed: u32 = 0;
+    let h_mods_size = (h_mods.len() * std::mem::size_of::<HMODULE>()) as u32;
 
-            if unsafe { Module32NextW(snapshot, &mut entry) }.is_err() {
-                break;
-            }
+    if unsafe {
+        EnumProcessModulesEx(
+            h_proc,
+            h_mods.as_mut_ptr(),
+            h_mods_size,
+            &mut needed,
+            filter,
+        )
+    }
+    .is_err()
+    {
+        unsafe { let _ = CloseHandle(h_proc); }
+        return modules;
+    }
+
+    let count = (needed as usize) / std::mem::size_of::<HMODULE>();
+    h_mods.truncate(count);
+
+    for &h_mod in &h_mods {
+        let mut name_buf = [0u16; 260];
+        let len = unsafe {
+            GetModuleFileNameExW(h_proc, h_mod, &mut name_buf)
+        };
+        if len == 0 { continue; }
+        let name = String::from_utf16_lossy(&name_buf[..len as usize]);
+        let base_name = std::path::Path::new(&name)
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_default();
+
+        let mut info = MODULEINFO::default();
+        if unsafe { GetModuleInformation(h_proc, h_mod, &mut info, std::mem::size_of::<MODULEINFO>() as u32) }.is_ok() {
+            modules.push(ModuleInfo {
+                name: base_name,
+                path: name,
+                base_address: info.lpBaseOfDll as u64,
+                size: info.SizeOfImage,
+            });
         }
     }
 
-    let _ = unsafe { CloseHandle(snapshot) };
+    unsafe { let _ = CloseHandle(h_proc); }
     modules
 }
 

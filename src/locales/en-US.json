@@ -22,7 +22,9 @@
     "slow": "SLOW",
     "fast": "FAST",
     "normal": "Normal",
-    "reset": "Reset"
+    "reset": "Reset",
+    "confirm": "confirm",
+    "cancel": "cancel"
   },
   "process": {
     "title": "System Processes",

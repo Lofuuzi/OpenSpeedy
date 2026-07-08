@@ -18,7 +18,9 @@
     "slow": "SLOW",
     "fast": "FAST",
     "normal": "通常",
-    "reset": "リセット"
+    "reset": "リセット",
+    "confirm": "確認",
+    "cancel": "取消"
   },
   "process": {
     "title": "システムプロセス",
@@ -68,6 +70,8 @@
     "increase": "加速",
     "decrease": "減速",
     "reset": "リセット",
+    "confirm": "確認",
+    "cancel": "取消",
     "gears": "ギアプリセット",
     "gear": "ギア",
     "multiplier": "倍率",

@@ -61,7 +61,7 @@ export default function SettingsManager() {
   }
 
   return (
-    <Box sx={{ height: "calc(100vh - 48px)", overflow: "auto", px: 2, pb: 2 }}>
+    <Box sx={{ height: "calc(100vh - 48px)", overflow: "auto", px: 1.5, pb: 2 }}>
       <Paper elevation={0} sx={{ mt: 2, p: 2, bgcolor: "background.paper", border: 1, borderColor: "divider" }}>
 
         {/* ── 速度快捷键 ── */}

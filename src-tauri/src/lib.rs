@@ -7,7 +7,17 @@ use process_enumerator::ModuleInfo;
 use std::process::Child;
 use std::sync::Mutex;
 
+use windows::Win32::System::Console::SetConsoleCtrlHandler;
+use windows::Win32::Foundation::BOOL;
+
 static BRIDGE_CHILDREN: Mutex<Vec<Child>> = Mutex::new(Vec::new());
+
+/// Ctrl+C handler — ensures bridge processes are killed when the user
+/// presses Ctrl+C in the terminal (debug mode / running from console).
+unsafe extern "system" fn ctrlc_handler(_ctrl_type: u32) -> BOOL {
+    shutdown_bridges();
+    std::process::exit(0);
+}
 
 fn ensure_bridges() {
     let mut children = BRIDGE_CHILDREN.lock().unwrap();
@@ -20,11 +30,15 @@ fn ensure_bridges() {
 
     for name in &["bridge64.exe", "bridge32.exe"] {
         let path = exe_dir.join(name);
+        let log_path = exe_dir.join(format!("{name}.log"));
         if path.exists() {
+            let stderr = std::fs::File::create(&log_path)
+                .map(std::process::Stdio::from)
+                .unwrap_or_else(|_| std::process::Stdio::null());
             match std::process::Command::new(&path)
                 .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
+                .stderr(stderr)
                 .spawn()
             {
                 Ok(child) => children.push(child),
@@ -32,14 +46,24 @@ fn ensure_bridges() {
             }
         }
     }
+
+    // Wait until bridges are ready (pipe server accepting connections)
+    let health_checks: [(&str, fn() -> bool); 2] = [
+        ("bridge64", bridge_client::bridge64_health as fn() -> bool),
+        ("bridge32", bridge_client::bridge32_health as fn() -> bool),
+    ];
+    for (name, check) in &health_checks {
+        for _ in 0..20 {
+            if check() { break; }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        eprintln!("[startup] {name} health: {}", check());
+    }
 }
 
 fn shutdown_bridges() {
-    // Send SHUTDOWN via pipes for graceful exit
-    bridge_client::bridge64_shutdown();
-    bridge_client::bridge32_shutdown();
-
-    // Kill any remaining bridge processes
+    // Kill bridge processes immediately — graceful SHUTDOWN via pipe can
+    // block if the bridge is busy processing a long-running command.
     if let Ok(mut children) = BRIDGE_CHILDREN.lock() {
         for mut child in children.drain(..) {
             let _ = child.kill();
@@ -98,9 +122,13 @@ async fn get_system_stats() -> system_stats::SystemStats {
 #[tauri::command(async)]
 async fn bridge_inject(pid: u32, arch: String) -> bool {
     if arch == "x86" {
-        bridge_client::bridge32_inject(pid) && bridge_client::bridge32_enable(pid)
+        let ok = bridge_client::bridge32_inject(pid);
+        bridge_client::bridge32_enable(pid);
+        ok
     } else {
-        bridge_client::bridge64_inject(pid) && bridge_client::bridge64_enable(pid)
+        let ok = bridge_client::bridge64_inject(pid);
+        bridge_client::bridge64_enable(pid);
+        ok
     }
 }
 
@@ -149,6 +177,8 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .setup(|_app| {
             ensure_bridges();
+            // Register Ctrl+C handler so bridges are killed on console exit
+            unsafe { let _ = SetConsoleCtrlHandler(Some(ctrlc_handler), true); }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -167,6 +197,7 @@ pub fn run() {
             bridge_get_status,
             set_always_on_top,
         ])
+        .device_event_filter(tauri::DeviceEventFilter::Always)
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app_handle, event| {

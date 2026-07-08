@@ -22,7 +22,9 @@
     "slow": "RALENTI",
     "fast": "RAPIDE",
     "normal": "Normal",
-    "reset": "Réinit."
+    "reset": "Réinit.",
+    "confirm": "OK",
+    "cancel": "Annuler"
   },
   "process": {
     "title": "Processus Système",
@@ -72,6 +74,8 @@
     "increase": "Augmenter",
     "decrease": "Diminuer",
     "reset": "Réinitialiser",
+    "confirm": "OK",
+    "cancel": "Annuler",
     "gears": "Préréglages",
     "gear": "Préréglage",
     "multiplier": "Multiplicateur",
