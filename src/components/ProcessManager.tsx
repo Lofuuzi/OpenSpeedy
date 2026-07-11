@@ -6,7 +6,7 @@ import { useInterval } from "ahooks";
 import { Splitter } from "antd";
 import {
   Box, Paper, Typography, Avatar, Switch, TextField,
-  Divider, Table, TableCell, TableHead, TableRow,
+  Divider, Table, TableCell, TableHead, TableRow, Tabs, Tab,
 } from "@mui/material";
 import WindowIcon from "@mui/icons-material/Window";
 import SearchIcon from "@mui/icons-material/Search";
@@ -14,7 +14,6 @@ import MemoryIcon from "@mui/icons-material/Memory";
 import SpeedPanel from "./SpeedPanel";
 import ProcessDetail from "./ProcessDetail";
 import { useSettings, useSpeed } from "../hooks/useSettings";
-import { useSnackbar } from "../contexts/SnackbarContext";
 
 // ── Types & constants ────────────────────────────────────────────────────
 
@@ -78,6 +77,7 @@ const ProcessRow = React.memo(function ProcessRow({
 
 const ProcessTable = function ProcessTable({
   processes, filtered, search, onSearch, icons, enabled, selectedPid, onToggle, onSelect,
+  nameGroups, nameFiltered, onToggleName, tab, onTabChange,
 }: {
   processes: ProcessInfo[];
   filtered: ProcessInfo[];
@@ -88,17 +88,33 @@ const ProcessTable = function ProcessTable({
   selectedPid: number | null;
   onToggle: (pid: number, arch: string) => void;
   onSelect: (pid: number) => void;
+  nameGroups: Map<string, { count: number; arch: string; pids: number[]; anyEnabled: boolean }>;
+  nameFiltered: [string, { count: number; arch: string; pids: number[]; anyEnabled: boolean }][];
+  onToggleName: (name: string) => void;
+  tab: number;
+  onTabChange: (v: number) => void;
 }) {
   const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const vz = useVirtualizer({ count: filtered.length, getScrollElement: () => scrollRef.current!, estimateSize: () => ROW_H, overscan: 12 });
+
+  const isPid = tab === 0;
+  const items = isPid ? filtered.length : nameFiltered.length;
+  const total = isPid ? processes.length : nameGroups.size;
+
+  const vz = useVirtualizer({ count: items, getScrollElement: () => scrollRef.current!, estimateSize: () => ROW_H, overscan: 12 });
 
   return (
     <Paper elevation={0} sx={{ height: "100%", bgcolor: "background.paper", border: 1, borderColor: "divider", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <Box sx={{ px: 2, pt: 1.5, pb: 0.5, display: "flex", alignItems: "center" }}>
         <MemoryIcon sx={{ color: "primary.main", fontSize: 18, mr: 1 }} />
         <Typography variant="caption" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, color: "text.secondary" }}>{t("process.title")}</Typography>
-        <Typography variant="caption" sx={{ ml: 1, fontWeight: 600, color: "primary.main" }}>{filtered.length} / {processes.length}</Typography>
+        <Typography variant="caption" sx={{ ml: 1, fontWeight: 600, color: "primary.main" }}>{items} / {total}</Typography>
+        <Box sx={{ flex: 1 }} />
+        <Tabs value={tab} onChange={(_, v) => { onTabChange(v); scrollRef.current?.scrollTo(0, 0); }}
+          sx={{ minHeight: 0, "& .MuiTab-root": { minHeight: 32, py: 0, fontSize: "0.75rem" } }}>
+          <Tab label={t("process.byPid")} />
+          <Tab label={t("process.byName")} />
+        </Tabs>
       </Box>
 
       <Box sx={{ px: 2, pb: 1, display: "flex", alignItems: "center", gap: 1 }}>
@@ -110,16 +126,39 @@ const ProcessTable = function ProcessTable({
         <Table size="small" sx={{ tableLayout: "fixed", flexShrink: 0 }}>
           <colgroup><col width={COL.pid} /><col /><col width={COL.check} /></colgroup>
           <TableHead><TableRow>
-            <TableCell>{t("process.pid")}</TableCell><TableCell>{t("process.name")}</TableCell><TableCell align="center">{t("process.enable")}</TableCell>
+            <TableCell>{isPid ? t("process.pid") : t("process.count")}</TableCell>
+            <TableCell>{t("process.name")}</TableCell>
+            <TableCell align="center">{t("process.enable")}</TableCell>
           </TableRow></TableHead>
         </Table>
 
         <Box ref={scrollRef} sx={{ flex: 1, overflow: "auto", position: "relative" }}>
           <div style={{ height: vz.getTotalSize(), width: 1 }} />
-          {vz.getVirtualItems().map(vr => (
-            <ProcessRow key={filtered[vr.index].pid} p={filtered[vr.index]} on={enabled.has(filtered[vr.index].pid)} icons={icons} start={vr.start} selected={selectedPid === filtered[vr.index].pid} onToggle={onToggle} onSelect={onSelect} />
-          ))}
-          {filtered.length === 0 && (
+          {isPid
+            ? vz.getVirtualItems().map(vr => (
+                <ProcessRow key={filtered[vr.index].pid} p={filtered[vr.index]} on={enabled.has(filtered[vr.index].pid)} icons={icons} start={vr.start} selected={selectedPid === filtered[vr.index].pid} onToggle={onToggle} onSelect={onSelect} />
+              ))
+            : vz.getVirtualItems().map(vr => {
+                const [name, group] = nameFiltered[vr.index];
+                return (
+                  <Box
+                    key={name}
+                    onClick={() => onSelect(group.pids[0])}
+                    sx={{
+                      display: "grid", gridTemplateColumns: `${COL.pid}px 1fr ${COL.check}px`,
+                      position: "absolute", top: 0, left: 0, right: 0, height: ROW_H, transform: `translateY(${vr.start}px)`,
+                      alignItems: "center", borderBottom: 1, borderColor: "divider", cursor: "pointer",
+                      bgcolor: selectedPid !== null && group.pids.includes(selectedPid) ? "rgba(92,107,192,0.12)" : group.anyEnabled ? "action.selected" : "transparent",
+                      "&:hover": { bgcolor: "action.hover" },
+                    }}
+                  >
+                    <Typography variant="body2" color="text.secondary">{group.count}</Typography>
+                    <Typography variant="body2" noWrap sx={{ fontWeight: 500 }}>{name}</Typography>
+                    <Box sx={{ textAlign: "center" }}><Switch size="small" checked={group.anyEnabled} onChange={() => onToggleName(name)} /></Box>
+                  </Box>
+                );
+              })}
+          {items === 0 && (
             <Box sx={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 1 }}>
               <SearchIcon sx={{ color: "text.disabled", fontSize: 36 }} />
               <Typography variant="body2" color="text.disabled">{search ? t("process.noResults") : t("process.loading")}</Typography>
@@ -145,10 +184,9 @@ export default function ProcessManager() {
   const [icons, setIcons] = useState<Record<number, string>>({});
   const [speedMap, setSpeedMap] = useState<Map<number, SpeedState>>(new Map());
   const [selectedPid, setSelectedPid] = useState<number | null>(null);
+  const [tab, setTab] = useState(0);
   const { settings } = useSettings();
   const { speed, setSpeed, commitSpeed } = useSpeed();
-  useSnackbar();
-  useTranslation();
 
   const gears = useMemo(() => settings
     ? [1, 2, 3, 4, 5].map(i => (settings[`gear${i}Speed` as keyof typeof settings] as number) || 1)
@@ -188,6 +226,46 @@ export default function ProcessManager() {
     if (!q) return processes;
     return processes.filter(p => p.name.toLowerCase().includes(q) || p.pid.toString().includes(q) || (p.window_title && p.window_title.toLowerCase().includes(q)));
   }, [processes, search]);
+
+  // Name grouping (for name-based toggle)
+  const nameGroups = useMemo(() => {
+    const map = new Map<string, { count: number; arch: string; pids: number[]; anyEnabled: boolean }>();
+    for (const p of processes) {
+      const key = p.name.toLowerCase();
+      const cur = map.get(key) || { count: 0, arch: p.arch, pids: [], anyEnabled: false };
+      cur.count++;
+      cur.pids.push(p.pid);
+      if (speedMap.get(p.pid)?.enabled) cur.anyEnabled = true;
+      map.set(key, cur);
+    }
+    return map;
+  }, [processes, speedMap]);
+
+  const nameFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return Array.from(nameGroups.entries());
+    return Array.from(nameGroups.entries()).filter(([name]) => name.includes(q));
+  }, [nameGroups, search]);
+
+  async function toggleName(name: string) {
+    const group = nameGroups.get(name.toLowerCase());
+    if (!group) return;
+    if (!group.anyEnabled) {
+      for (const pid of group.pids) {
+        setSpeedMap(prev => { const n = new Map(prev); n.set(pid, { injected: true, enabled: true, arch: group.arch }); return n; });
+      }
+      for (const pid of group.pids) {
+        invoke<boolean>("bridge_inject", { pid, arch: group.arch }).catch(() => {});
+      }
+    } else {
+      for (const pid of group.pids) {
+        setSpeedMap(prev => { const n = new Map(prev); const cur = n.get(pid); if (cur) n.set(pid, { ...cur, enabled: false }); return n; });
+      }
+      for (const pid of group.pids) {
+        invoke<boolean>("bridge_disable", { pid, arch: group.arch }).catch(() => {});
+      }
+    }
+  }
 
   // Icons
   useEffect(() => {
@@ -229,6 +307,8 @@ export default function ProcessManager() {
               processes={processes} filtered={filtered} search={search} onSearch={setSearch}
               icons={icons} enabled={enabled} selectedPid={selectedPid}
               onToggle={toggle} onSelect={setSelectedPid}
+              nameGroups={nameGroups} nameFiltered={nameFiltered} onToggleName={toggleName}
+              tab={tab} onTabChange={setTab}
             />
           </Splitter.Panel>
           <Splitter.Panel min="250px">
