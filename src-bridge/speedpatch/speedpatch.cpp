@@ -281,13 +281,12 @@ double SpeedFactor()
 
 VOID WINAPI DetourSleep(DWORD dwMilliseconds)
 {
-    std::shared_lock<std::shared_mutex> lock(mutex);
     realSleep(dwMilliseconds / SpeedFactor());
 }
 
 DWORD WINAPI DetourSleepEx(DWORD dwMilliseconds, BOOL bAlertable)
 {
-    std::shared_lock<std::shared_mutex> lock(mutex);
+
     return realSleepEx(dwMilliseconds / SpeedFactor(), bAlertable);
 }
 
@@ -296,7 +295,7 @@ UINT_PTR WINAPI DetourSetTimer(HWND      hWnd,
                                UINT      uElapse,
                                TIMERPROC lpTimerFunc)
 {
-    std::shared_lock<std::shared_mutex> lock(mutex);
+
     return realSetTimer(
         hWnd,
         nIDEvent,
@@ -313,7 +312,7 @@ static std::atomic<bool> shouldUpdateTimeGetTime = false;
 
 DWORD WINAPI DetourTimeGetTime(VOID)
 {
-    std::shared_lock<std::shared_mutex> lock(mutex);
+
     if (pre_factor != SpeedFactor())
     {
         pre_factor = SpeedFactor();
@@ -353,7 +352,7 @@ static LONG prevcallDetourGetMessageTime = 0;
 static std::atomic<bool> shouldUpdateGetMessageTime = false;
 LONG WINAPI DetourGetMessageTime(VOID)
 {
-    std::shared_lock<std::shared_mutex> lock(mutex);
+
     if (pre_factor != SpeedFactor())
     {
         pre_factor = SpeedFactor();
@@ -379,7 +378,7 @@ static DWORD prevcallDetourGetTickCount = 0;
 static std::atomic<bool> shouldUpdateGetTickCount = false;
 DWORD WINAPI DetourGetTickCount(VOID)
 {
-    std::shared_lock<std::shared_mutex> lock(mutex);
+
     if (pre_factor != SpeedFactor())
     {
         pre_factor = SpeedFactor();
@@ -405,7 +404,7 @@ static ULONGLONG prevcallDetourGetTickCount64 = 0;
 std::atomic<bool> shouldUpdateGetTickCount64 = false;
 ULONGLONG WINAPI DetourGetTickCount64(VOID)
 {
-    std::shared_lock<std::shared_mutex> lock(mutex);
+
     if (pre_factor != SpeedFactor())
     {
         pre_factor = SpeedFactor();
@@ -431,7 +430,7 @@ static LARGE_INTEGER prevcallDetourQueryPerformanceCounter = { 0 };
 static std::atomic<bool> shouldUpdateQueryPerformanceCounter = false;
 BOOL WINAPI DetourQueryPerformanceCounter(LARGE_INTEGER* lpPerformanceCount)
 {
-    std::shared_lock<std::shared_mutex> lock(mutex);
+
     if (lpPerformanceCount == NULL)
     {
         return FALSE;
@@ -467,7 +466,7 @@ BOOL WINAPI DetourQueryPerformanceCounter(LARGE_INTEGER* lpPerformanceCount)
 static LARGE_INTEGER baselineKernelQueryPerformanceFrequency = { 0 };
 BOOL WINAPI DetourQueryPerformanceFrequency(LARGE_INTEGER* lpFrequency)
 {
-    std::shared_lock<std::shared_mutex> lock(mutex);
+
     if (lpFrequency == NULL)
     {
         return FALSE;
@@ -487,7 +486,7 @@ static std::atomic<FILETIME> prevcallDetourGetSystemTimeAsFileTime({ 0 });
 static std::atomic<bool> shouldUpdateGetSystemTimeAsFileTime = false;
 VOID WINAPI DetourGetSystemTimeAsFileTime(LPFILETIME lpSystemTimeAsFileTime)
 {
-    std::shared_lock<std::shared_mutex> lock(mutex);
+
     if (lpSystemTimeAsFileTime == NULL)
     {
         return;
@@ -535,7 +534,7 @@ static std::atomic<bool> shouldUpdateGetSystemTimePreciseAsFileTime = false;
 VOID WINAPI
 DetourGetSystemTimePreciseAsFileTime(LPFILETIME lpSystemTimeAsFileTime)
 {
-    std::shared_lock<std::shared_mutex> lock(mutex);
+
     if (lpSystemTimeAsFileTime == NULL)
     {
         return;
