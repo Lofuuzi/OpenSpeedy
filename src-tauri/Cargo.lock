@@ -2409,7 +2409,7 @@ dependencies = [
 
 [[package]]
 name = "openspeedy"
-version = "3.3.4"
+version = "3.3.5"
 dependencies = [
  "base64 0.22.1",
  "cmake",
